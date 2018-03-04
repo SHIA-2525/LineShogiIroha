@@ -19,7 +19,7 @@
 namespace
 {
 	#define SOCK_PATH "/var/run/lsi/lsi.sock"
-	#define BUF_SIZE 65536
+	#define BUF_SIZE (8192+1)
 	static char s_sockReadBuf[BUF_SIZE] = { 0 };
 
 	enum struct EVENT_TYPE : int {
