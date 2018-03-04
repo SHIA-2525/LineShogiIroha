@@ -132,6 +132,7 @@ int App::Main()
 			std::string err = picojson::parse(val, pBuf, pBuf + strlen(pBuf));
 			if (err == "") {
 				// この先はラインから来たjsonを信頼して動作させる
+				// ソケットから来る前に署名確認済み
 				po root = val.get<po>();
 				pa events = root["events"].get<pa>();
 				for (int i = 0; i < events.size(); i++) {
@@ -181,6 +182,8 @@ int App::Main()
 							std::cout << "test:" << text << std::endl;
 						}
 						break;
+
+						// テキスト以外は今んとこ何もしない
 						case MESSAGE_TYPE::NONE:
 						case MESSAGE_TYPE::IMAGE:
 						case MESSAGE_TYPE::VIDEO:
@@ -193,6 +196,7 @@ int App::Main()
 						}
 					}
 					break;
+
 					case EVENT_TYPE::NONE:
 					case EVENT_TYPE::FOLLOW:
 					case EVENT_TYPE::UNFOLLOW:
