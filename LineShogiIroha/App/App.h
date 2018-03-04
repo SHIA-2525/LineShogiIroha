@@ -9,7 +9,7 @@
 
 class App {
 public:
-	App() : m_bInit(false), m_listen_fd(0), m_local(), m_remote() {}
+	App();
 	~App() {}
 
 	int Init();
@@ -19,6 +19,7 @@ public:
 
 private:
 	bool		m_bInit;
+	bool		m_bExitReservation;
 
 	int			m_listen_fd;
 	sockaddr_un m_local, m_remote;

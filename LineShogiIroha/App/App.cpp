@@ -16,9 +16,45 @@
 #include "App.h"
 #include "picojson.h"
 
-#define SOCK_PATH "/var/run/lsi/lsi.sock"
-#define BUF_SIZE 65536
-static char s_sockReadBuf[BUF_SIZE] = { 0 };
+namespace
+{
+	#define SOCK_PATH "/var/run/lsi/lsi.sock"
+	#define BUF_SIZE 65536
+	static char s_sockReadBuf[BUF_SIZE] = { 0 };
+
+	enum struct EVENT_TYPE : int {
+		NONE = 0,
+		MESSAGE,	// テキスト、画像、スタンプ等
+		FOLLOW,		// 友達追加、ブロック解除
+		UNFOLLOW,	// ブロック
+		JOIN,		// グループorトークルームへの参加
+		LEAVE,		// グループからBOTが削除(トークルームからの削除は発行されない,自身で抜けた場合は発行されない)
+		POSTBACK,	// ユーザーが、ポストバックを開始するアクションを実行
+		BEACON,		// LINE Beaconデバイスの受信圏をユーザーが出入り
+		MAX,
+	};
+
+	enum struct MESSAGE_TYPE : int {
+		NONE = 0,
+		TEXT,
+		IMAGE,
+		VIDEO,
+		AUDIO,
+		FILE,
+		LOCATION,
+		STICKER,
+	};
+}
+
+
+App::App()
+	: m_bInit(false)
+	, m_bExitReservation(false)
+	, m_listen_fd(0)
+	, m_local()
+	, m_remote()
+{
+}
 
 int App::Init()
 {
@@ -56,147 +92,132 @@ int App::Finish()
 
 int App::Main()
 {
+	if (!m_bInit) { return 1; }
+
 	int ret = 0;
-	if (m_bInit) {
-		for (;;) {
-			socklen_t len = sizeof(m_remote);
+	while (!m_bExitReservation) {
+		socklen_t len = sizeof(m_remote);
 
-			DEBUG_PRINTF("before accept.\n");
-			int remote_fd = accept(m_listen_fd, (struct sockaddr *)&m_remote, &len);
-			if (remote_fd < 0) {
-				printf("failed to accept.\n");
-				perror("failed to accept");
-				return 0;
+		DEBUG_PRINTF("before accept.\n");
+		int remote_fd = accept(m_listen_fd, (struct sockaddr *)&m_remote, &len);
+		if (remote_fd < 0) {
+			printf("failed to accept.\n");
+			perror("failed to accept");
+			return 0;
+		}
+		DEBUG_PRINTF("accepted.\n");
+
+		memset(s_sockReadBuf, 0, BUF_SIZE);
+		ssize_t size = read(remote_fd, s_sockReadBuf, BUF_SIZE);
+		if (size > 0) {
+
+			//DEBUG_PRINTF("read buf size %d.\n", size);
+			DEBUG_PRINTF("buf:\n");
+			DEBUG_PRINTF(s_sockReadBuf);
+			DEBUG_PRINTF("\n\n");
+
+			// PC内から終了を命令
+			if (strcmp(s_sockReadBuf, "stop\n") == 0) {
+				DEBUG_PRINTF("recv cmd:stop");
+				m_bExitReservation = true;
+				continue;
 			}
-			DEBUG_PRINTF("accepted.\n");
 
-			ssize_t size = read(remote_fd, s_sockReadBuf, BUF_SIZE);
-			if (size > 0) {
+			using pv = picojson::value;
+			using po = picojson::object;
+			using pa = picojson::array;
 
-				//DEBUG_PRINTF("read buf size %d.\n", size);
-				DEBUG_PRINTF("buf:\n");
-				DEBUG_PRINTF(s_sockReadBuf);
-				DEBUG_PRINTF("\n\n");
+			char* pBuf = s_sockReadBuf;
+			pv val;
+			std::string err = picojson::parse(val, pBuf, pBuf + strlen(pBuf));
+			if (err == "") {
+				// この先はラインから来たjsonを信頼して動作させる
+				po root = val.get<po>();
+				pa events = root["events"].get<pa>();
+				for (int i = 0; i < events.size(); i++) {
+					po evt = events[i].get<po>();
 
-				using pv = picojson::value;
-				using po = picojson::object;
-				using pa = picojson::array;
+					std::string replyToken = evt["replyToken"].get<std::string>();
+					std::string eventTypeStr = evt["type"].get<std::string>();
+					double timestamp = evt["timestamp"].get<double>();
 
-				char* pBuf = s_sockReadBuf;
-				pv val;
-				std::string err = picojson::parse(val, pBuf, pBuf + strlen(pBuf));
-				if (err == "") {
-					// この先はラインから来たjsonを信頼して動作させる
-					po root = val.get<po>();
-					pa events = root["events"].get<pa>();
-					for (int i = 0; i < events.size(); i++) {
-						po evt = events[i].get<po>();
+					po src = evt["source"].get<po>();
+					std::string sourceType = src["type"].get<std::string>();
+					std::string userId = "";
+					std::string groupId = "";
+					std::string roomId = "";
+					if (src["userId"].is<std::string>()) {
+						userId = src["userId"].get<std::string>();
+					}
+					if (src["groupId"].is<std::string>()) {
+						groupId = src["groupId"].get<std::string>();
+					}
+					if (src["roomId"].is<std::string>()) {
+						roomId = src["roomId"].get<std::string>();
+					}
 
-						std::string replyToken = evt["replyToken"].get<std::string>();
-						std::string eventTypeStr = evt["type"].get<std::string>();
-						double timestamp = evt["timestamp"].get<double>();
 
-						po src = evt["source"].get<po>();
-						std::string sourceType = src["type"].get<std::string>();
-						std::string userId = "";
-						std::string groupId = "";
-						std::string roomId = "";
-						if (src["userId"].is<std::string>()) {
-							userId = src["userId"].get<std::string>();
-						}
-						if (src["groupId"].is<std::string>()) {
-							groupId = src["groupId"].get<std::string>();
-						}
-						if (src["roomId"].is<std::string>()) {
-							roomId = src["roomId"].get<std::string>();
-						}
+					EVENT_TYPE eventType = EVENT_TYPE::NONE;
+					if (eventTypeStr == "message") { eventType = EVENT_TYPE::MESSAGE; } else if (eventTypeStr == "follow") { eventType = EVENT_TYPE::FOLLOW; } else if (eventTypeStr == "unfollow") { eventType = EVENT_TYPE::UNFOLLOW; } else if (eventTypeStr == "join") { eventType = EVENT_TYPE::JOIN; } else if (eventTypeStr == "leave") { eventType = EVENT_TYPE::LEAVE; } else if (eventTypeStr == "postback") { eventType = EVENT_TYPE::POSTBACK; } else if (eventTypeStr == "follow") { eventType = EVENT_TYPE::BEACON; }
 
-						enum struct EVENT_TYPE : int {
-							NONE = 0,
-							MESSAGE,	// テキスト、画像、スタンプ等
-							FOLLOW,		// 友達追加、ブロック解除
-							UNFOLLOW,	// ブロック
-							JOIN,		// グループorトークルームへの参加
-							LEAVE,		// グループからBOTが削除(トークルームからの削除は発行されない,自身で抜けた場合は発行されない)
-							POSTBACK,	// ユーザーが、ポストバックを開始するアクションを実行
-							BEACON,		// LINE Beaconデバイスの受信圏をユーザーが出入り
-							MAX,
-						};
+					switch (eventType)
+					{
+					case EVENT_TYPE::MESSAGE:
+					{
+						po mes = evt["message"].get<po>();
+						std::string id = mes["id"].get<std::string>();
+						std::string mesTypeStr = mes["type"].get<std::string>();
 
-						EVENT_TYPE eventType = EVENT_TYPE::NONE;
-						if (eventTypeStr == "message") { eventType = EVENT_TYPE::MESSAGE; } else if (eventTypeStr == "follow") { eventType = EVENT_TYPE::FOLLOW; } else if (eventTypeStr == "unfollow") { eventType = EVENT_TYPE::UNFOLLOW; } else if (eventTypeStr == "join") { eventType = EVENT_TYPE::JOIN; } else if (eventTypeStr == "leave") { eventType = EVENT_TYPE::LEAVE; } else if (eventTypeStr == "postback") { eventType = EVENT_TYPE::POSTBACK; } else if (eventTypeStr == "follow") { eventType = EVENT_TYPE::BEACON; }
+						MESSAGE_TYPE mesType = MESSAGE_TYPE::NONE;
+						if (mesTypeStr == "text") { mesType = MESSAGE_TYPE::TEXT; } else if (mesTypeStr == "image") { mesType = MESSAGE_TYPE::IMAGE; } else if (mesTypeStr == "video") { mesType = MESSAGE_TYPE::VIDEO; } else if (mesTypeStr == "audio") { mesType = MESSAGE_TYPE::AUDIO; } else if (mesTypeStr == "file") { mesType = MESSAGE_TYPE::FILE; } else if (mesTypeStr == "location") { mesType = MESSAGE_TYPE::LOCATION; } else if (mesTypeStr == "sticker") { mesType = MESSAGE_TYPE::STICKER; }
 
-						switch (eventType)
+						std::cout << "message type:" << mesTypeStr << std::endl;
+
+						switch (mesType)
 						{
-						case EVENT_TYPE::MESSAGE:
+						case MESSAGE_TYPE::TEXT:
 						{
-							po mes = evt["message"].get<po>();
-							std::string id = mes["id"].get<std::string>();
-							std::string mesTypeStr = mes["type"].get<std::string>();
-
-							enum struct MESSAGE_TYPE : int {
-								NONE = 0,
-								TEXT,
-								IMAGE,
-								VIDEO,
-								AUDIO,
-								FILE,
-								LOCATION,
-								STICKER,
-							};
-							MESSAGE_TYPE mesType = MESSAGE_TYPE::NONE;
-							if (mesTypeStr == "text") { mesType = MESSAGE_TYPE::TEXT; } else if (mesTypeStr == "image") { mesType = MESSAGE_TYPE::IMAGE; } else if (mesTypeStr == "video") { mesType = MESSAGE_TYPE::VIDEO; } else if (mesTypeStr == "audio") { mesType = MESSAGE_TYPE::AUDIO; } else if (mesTypeStr == "file") { mesType = MESSAGE_TYPE::FILE; } else if (mesTypeStr == "location") { mesType = MESSAGE_TYPE::LOCATION; } else if (mesTypeStr == "sticker") { mesType = MESSAGE_TYPE::STICKER; }
-
-							std::cout << "message type:" << mesTypeStr << std::endl;
-
-							switch (mesType)
-							{
-							case MESSAGE_TYPE::TEXT:
-							{
-								std::string text = mes["text"].get<std::string>();
-								std::cout << "test:" << text << std::endl;
-							}
-							break;
-							case MESSAGE_TYPE::NONE:
-							case MESSAGE_TYPE::IMAGE:
-							case MESSAGE_TYPE::VIDEO:
-							case MESSAGE_TYPE::AUDIO:
-							case MESSAGE_TYPE::FILE:
-							case MESSAGE_TYPE::LOCATION:
-							case MESSAGE_TYPE::STICKER:
-							default:
-								break;
-							}
+							std::string text = mes["text"].get<std::string>();
+							std::cout << "test:" << text << std::endl;
 						}
 						break;
-						case EVENT_TYPE::NONE:
-						case EVENT_TYPE::FOLLOW:
-						case EVENT_TYPE::UNFOLLOW:
-						case EVENT_TYPE::JOIN:
-						case EVENT_TYPE::LEAVE:
-						case EVENT_TYPE::POSTBACK:
-						case EVENT_TYPE::BEACON:
+						case MESSAGE_TYPE::NONE:
+						case MESSAGE_TYPE::IMAGE:
+						case MESSAGE_TYPE::VIDEO:
+						case MESSAGE_TYPE::AUDIO:
+						case MESSAGE_TYPE::FILE:
+						case MESSAGE_TYPE::LOCATION:
+						case MESSAGE_TYPE::STICKER:
 						default:
 							break;
 						}
 					}
-				} else {
-					std::cout << "json parse err:" << err << std::endl;
+					break;
+					case EVENT_TYPE::NONE:
+					case EVENT_TYPE::FOLLOW:
+					case EVENT_TYPE::UNFOLLOW:
+					case EVENT_TYPE::JOIN:
+					case EVENT_TYPE::LEAVE:
+					case EVENT_TYPE::POSTBACK:
+					case EVENT_TYPE::BEACON:
+					default:
+						break;
+					}
 				}
-
+			} else {
+				std::cout << "json parse err:" << err << std::endl;
 			}
 
-			DEBUG_PRINTF("end read.\n");
-			//if (errno) { // 相手側からクローズされるとエラーはくんで無視
-			//	printf("\n--\n err : %d %s\n--\n", errno, strerror(errno));
-			//	perror("fail to send");
-			//}
-
-			DEBUG_PRINTF("close.\n");
-			close(remote_fd);
 		}
-	} else {
-		ret = 1;
+
+		DEBUG_PRINTF("end read.\n");
+		//if (errno) { // 相手側からクローズされるとエラーはくんで無視
+		//	printf("\n--\n err : %d %s\n--\n", errno, strerror(errno));
+		//	perror("fail to send");
+		//}
+
+		DEBUG_PRINTF("close.\n");
+		close(remote_fd);
 	}
 	return ret;
 }
