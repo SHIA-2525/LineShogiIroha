@@ -106,6 +106,7 @@
     <ClInclude Include="Include\add_include.h" />
     <ClInclude Include="Include\PreTypes.h" />
     <ClInclude Include="Include\picojson.h" />
+    <ClInclude Include="Sender\ChannelAccessToken.h" />
     <ClInclude Include="Sender\Sender.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
