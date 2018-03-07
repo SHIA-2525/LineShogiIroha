@@ -18,6 +18,10 @@
 
 namespace
 {
+	using pv = picojson::value;
+	using po = picojson::object;
+	using pa = picojson::array;
+
 	#define SOCK_PATH "/var/run/lsi/lsi.sock"
 	#define BUF_SIZE (8192+1)
 	static char s_sockReadBuf[BUF_SIZE] = { 0 };
@@ -122,10 +126,6 @@ int App::Main()
 				m_bExitReservation = true;
 				continue;
 			}
-
-			using pv = picojson::value;
-			using po = picojson::object;
-			using pa = picojson::array;
 
 			char* pBuf = s_sockReadBuf;
 			pv val;

@@ -99,12 +99,14 @@
   <ItemGroup>
     <ClCompile Include="App\App.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Sender\Sender.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App\App.h" />
     <ClInclude Include="Include\add_include.h" />
     <ClInclude Include="Include\PreTypes.h" />
     <ClInclude Include="Include\picojson.h" />
+    <ClInclude Include="Sender\Sender.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
