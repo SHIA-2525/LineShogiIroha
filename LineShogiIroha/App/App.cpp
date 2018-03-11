@@ -15,7 +15,7 @@
 
 #include "App.h"
 #include "picojson.h"
-#include "../Sender/Sender.h"
+#include "../CommandManger/CommandManager.h"
 
 namespace
 {
@@ -180,17 +180,9 @@ int App::Main()
 						case MESSAGE_TYPE::TEXT:
 						{
 							std::string text = mes["text"].get<std::string>();
-							std::cout << "test:" << text << std::endl;
+							DEBUG_PRINTF("text:%s", text.c_str());
 
-							Sender sender;
-							sender.SetSendType(Sender::SEND_TYPE::REPLY, replyToken);
-							sender.AddText((text + "ぞい"));
-							int httpRet = sender.Send();
-
-							Sender sender2;
-							sender2.SetSendType(Sender::SEND_TYPE::PUSH, userId);
-							sender2.AddText("これもテストですぞ");
-							httpRet = sender2.Send();
+							CommandManager::GetInstance()->SetCommand(text);
 						}
 						break;
 

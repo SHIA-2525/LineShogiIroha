@@ -98,16 +98,20 @@
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="App\App.cpp" />
+    <ClCompile Include="CommandManger\CommandManager.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Sender\Sender.cpp" />
+    <ClCompile Include="SQLManager\SQLManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App\App.h" />
+    <ClInclude Include="CommandManger\CommandManager.h" />
     <ClInclude Include="Include\add_include.h" />
     <ClInclude Include="Include\PreTypes.h" />
     <ClInclude Include="Include\picojson.h" />
     <ClInclude Include="Sender\ChannelAccessToken.h" />
     <ClInclude Include="Sender\Sender.h" />
+    <ClInclude Include="SQLManager\SQLManager.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -118,7 +122,7 @@
       <AdditionalOptions>-I $(RemoteProjectDir)/Include %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <LibraryDependencies>curl</LibraryDependencies>
+      <LibraryDependencies>curl;pq</LibraryDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
@@ -130,7 +134,7 @@
       <AdditionalOptions>-I $(RemoteProjectDir)/Include %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <LibraryDependencies>curl</LibraryDependencies>
+      <LibraryDependencies>curl;pq</LibraryDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
@@ -142,7 +146,7 @@
       <AdditionalOptions>-I $(RemoteProjectDir)/Include %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <LibraryDependencies>curl</LibraryDependencies>
+      <LibraryDependencies>curl;pq</LibraryDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
@@ -153,7 +157,7 @@
       <AdditionalOptions>-I $(RemoteProjectDir)/Include %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <LibraryDependencies>curl</LibraryDependencies>
+      <LibraryDependencies>curl;pq</LibraryDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -164,7 +168,7 @@
       <AdditionalOptions>-I $(RemoteProjectDir)/Include %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <LibraryDependencies>curl</LibraryDependencies>
+      <LibraryDependencies>curl;pq</LibraryDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
@@ -175,7 +179,7 @@
       <AdditionalOptions>-I $(RemoteProjectDir)/Include %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <LibraryDependencies>curl</LibraryDependencies>
+      <LibraryDependencies>curl;pq</LibraryDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
