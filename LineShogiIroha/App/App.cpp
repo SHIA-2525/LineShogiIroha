@@ -1,9 +1,9 @@
 #include <add_include.h>
 //--------------------------------
-// App.cpp : ���C������Ă΂��
-// ���C�������json��unix�h���C���\�P�b�g�o�R�Ŏ�M
-// �p�[�X���āA���ꂼ��̋������ƂɃN���X�֓n��
-// json�̃p�[�X���͂��̒��őS���������āA�K�v�ȃf�[�^���\���̂œn��
+// App.cpp : メインから呼ばれる
+// ラインからのjsonをunixドメインソケット経由で受信
+// パースして、それぞれの挙動ごとにクラスへ渡す
+// jsonのパース等はこの中で全部処理して、必要なデータを構造体で渡す
 //
 // date : 2018/03/04
 //--------------------------------
@@ -15,6 +15,7 @@
 
 #include "App.h"
 #include "picojson.h"
+#include "../Sender/Sender.h"
 
 namespace
 {
@@ -28,13 +29,13 @@ namespace
 
 	enum struct EVENT_TYPE : int {
 		NONE = 0,
-		MESSAGE,	// �e�L�X�g�A�摜�A�X�^���v��
-		FOLLOW,		// �F�B�ǉ��A�u���b�N����
-		UNFOLLOW,	// �u���b�N
-		JOIN,		// �O���[�vor�g�[�N���[���ւ̎Q��
-		LEAVE,		// �O���[�v����BOT���폜(�g�[�N���[������̍폜�͔��s����Ȃ�,���g�Ŕ������ꍇ�͔��s����Ȃ�)
-		POSTBACK,	// ���[�U�[���A�|�X�g�o�b�N���J�n����A�N�V���������s
-		BEACON,		// LINE Beacon�f�o�C�X�̎�M�������[�U�[���o����
+		MESSAGE,	// テキスト、画像、スタンプ等
+		FOLLOW,		// 友達追加、ブロック解除
+		UNFOLLOW,	// ブロック
+		JOIN,		// グループorトークルームへの参加
+		LEAVE,		// グループからBOTが削除(トークルームからの削除は発行されない,自身で抜けた場合は発行されない)
+		POSTBACK,	// ユーザーが、ポストバックを開始するアクションを実行
+		BEACON,		// LINE Beaconデバイスの受信圏をユーザーが出入り
 		MAX,
 	};
 
@@ -120,7 +121,7 @@ int App::Main()
 			DEBUG_PRINTF(s_sockReadBuf);
 			DEBUG_PRINTF("\n\n");
 
-			// PC������I���𖽗�
+			// PC内から終了を命令
 			if (strcmp(s_sockReadBuf, "stop\n") == 0) {
 				DEBUG_PRINTF("recv cmd:stop");
 				m_bExitReservation = true;
@@ -131,8 +132,8 @@ int App::Main()
 			pv val;
 			std::string err = picojson::parse(val, pBuf, pBuf + strlen(pBuf));
 			if (err == "") {
-				// ���̐�̓��C�����痈��json��M�����ē��삳����
-				// �\�P�b�g���痈��O�ɏ����m�F�ς�
+				// この先はラインから来たjsonを信頼して動作させる
+				// ソケットから来る前に署名確認済み
 				po root = val.get<po>();
 				pa events = root["events"].get<pa>();
 				for (int i = 0; i < events.size(); i++) {
@@ -180,10 +181,20 @@ int App::Main()
 						{
 							std::string text = mes["text"].get<std::string>();
 							std::cout << "test:" << text << std::endl;
+
+							Sender sender;
+							sender.SetSendType(Sender::SEND_TYPE::REPLY, replyToken);
+							sender.AddText((text + "ぞい"));
+							int httpRet = sender.Send();
+
+							Sender sender2;
+							sender2.SetSendType(Sender::SEND_TYPE::PUSH, userId);
+							sender2.AddText("これもテストですぞ");
+							httpRet = sender2.Send();
 						}
 						break;
 
-						// �e�L�X�g�ȊO�͍���Ƃ��������Ȃ�
+						// テキスト以外は今んとこ何もしない
 						case MESSAGE_TYPE::NONE:
 						case MESSAGE_TYPE::IMAGE:
 						case MESSAGE_TYPE::VIDEO:
@@ -215,7 +226,7 @@ int App::Main()
 		}
 
 		DEBUG_PRINTF("end read.\n");
-		//if (errno) { // ���葤����N���[�Y�����ƃG���[�͂���Ŗ���
+		//if (errno) { // 相手側からクローズされるとエラーはくんで無視
 		//	printf("\n--\n err : %d %s\n--\n", errno, strerror(errno));
 		//	perror("fail to send");
 		//}

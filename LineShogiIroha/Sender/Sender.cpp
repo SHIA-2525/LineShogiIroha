@@ -1,13 +1,18 @@
 #include <add_include.h>
 //--------------------------------
-// Sender.h : ƒ‰ƒCƒ“‚ÉƒƒbƒZ[ƒW‚ğreply,push‚·‚é
-// ƒNƒ‰ƒXì¬ŒãAreply,push‘I‘ğA‘—Mæ‘I‘ğ
-// ‘—Mæ‚É‘—‚éƒƒbƒZ[ƒW‚ğAdd‚µ‚Ä‚¢‚­
-// send‚·‚éAreturn‚ªhttp‚ÌŒ‹‰Ê
+// Sender.h : ãƒ©ã‚¤ãƒ³ã«ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã‚’reply,pushã™ã‚‹
+// ã‚¯ãƒ©ã‚¹ä½œæˆå¾Œã€reply,pushé¸æŠã€é€ä¿¡å…ˆé¸æŠ
+// é€ä¿¡å…ˆã«é€ã‚‹ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã‚’Addã—ã¦ã„ã
+// sendã™ã‚‹ã€returnãŒhttpã®çµæœ
 // date : 2018/03/05
 //--------------------------------
 #include "Sender.h"
 #include "picojson.h"
+
+#include <curl/curl.h>
+
+#define LINE_REPLY_URL "https://api.line.me/v2/bot/message/reply"
+#define LINE_PUSH_URL  "https://api.line.me/v2/bot/message/push"
 
 // This file is not versioned.
 // Copy from ChannelAccessToken.h.template
@@ -18,6 +23,9 @@ namespace
 	using pv = picojson::value;
 	using po = picojson::object;
 	using pa = picojson::array;
+
+	size_t curl_callback(char *ptr, size_t size, size_t nmemb, void *stream) {
+	}
 }
 
 Sender::Sender()
@@ -92,6 +100,45 @@ int Sender::Send()
 		ary.push_back(pv(m_contents[i]));
 	}
 	obj.insert({ "messages", pv(ary) });
+	std::string sendJsonStr = pv(obj).serialize();
+	
+	CURL *curl;
+	CURLcode curlRet;
+	int wr_error = 0;
+
+	curl = curl_easy_init();
+	if (curl == NULL) {
+		DEBUG_PRINTF("curl init failed.\n");
+		return -2;
+	}
+
+	curl_easy_setopt(curl, CURLOPT_URL, (m_sendType == SEND_TYPE::REPLY) ? LINE_REPLY_URL : LINE_PUSH_URL);
+	//curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+
+	struct curl_slist* headers = NULL;
+	headers = curl_slist_append(headers, "Content-Type:application/json; charser=UTF-8");
+	headers = curl_slist_append(headers, "Authorization: Bearer {" CHANNEL_ACCESS_TOKEN "}");
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+	curl_easy_setopt(curl, CURLOPT_POST, 1);
+	curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, sendJsonStr.c_str());
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(sendJsonStr.c_str()));
+
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_callback);
+
+	curlRet = curl_easy_perform(curl);
+	
+	long http_code = 0;
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+	curl_easy_cleanup(curl);
+	
+	if (http_code == 200 && curlRet != CURLE_ABORTED_BY_CALLBACK) {
+		return http_code;
+	} else {
+		return -curlRet;
+	}
 
 	return 0;
 }
